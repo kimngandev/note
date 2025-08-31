@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Ghi Chú Nhanh (Cloud)",
+  "version": "2.0",
+  "description": "Một extension ghi chú nhanh và đơn giản, đồng bộ trên đám mây.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.firebaseio.com/*",
+    "https://*.googleapis.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/icon.png",
+      "48": "images/icon.png",
+      "128": "images/icon.png"
+    }
+  },
+  "icons": {
+    "16": "images/icon.png",
+    "48": "images/icon.png",
+    "128": "images/icon.png"
+  },
+  "content_security_policy": {
+  "extension_pages": "script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
+}
+}

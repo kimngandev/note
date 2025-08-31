@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Ghi Chú Nhanh</title>
+    <link rel="stylesheet" href="popup.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- 1. Màn hình tải -->
+    <div id="loading-screen" class="screen">
+        <div class="spinner"></div>
+        <p>Đang tải...</p>
+    </div>
+
+    <!-- 2. Màn hình xác thực -->
+    <div id="auth-screen" class="screen hidden">
+        <div class="container">
+            <header>
+                <h1>Chào mừng bạn!</h1>
+            </header>
+            <div class="auth-form">
+                <input type="email" id="email-input" placeholder="Email" required>
+                <input type="password" id="password-input" placeholder="Mật khẩu" required>
+                <p id="auth-error" class="error-message"></p>
+                <div class="auth-buttons">
+                    <button id="login-btn" class="auth-btn">Đăng nhập</button>
+                    <button id="register-btn" class="auth-btn secondary">Tạo tài khoản</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Màn hình ứng dụng -->
+    <div id="app-screen" class="screen hidden">
+        <div class="container">
+            <header class="app-header">
+                <p>Xin chào, <span id="user-email-display"></span></p>
+                <button id="logout-btn" title="Đăng xuất">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
+                </button>
+            </header>
+            <main>
+                <div class="input-section">
+                    <input type="text" id="new-note-title" placeholder="Tiêu đề...">
+                    <div class="tag-selector">
+                        <label for="note-tag-select">Chọn thẻ:</label>
+                        <select id="note-tag-select"></select>
+                    </div>
+                    <textarea id="new-note-content" placeholder="Nhập nội dung ghi chú ở đây..."></textarea>
+                    <button id="save-note-btn" class="save-btn">Lưu Ghi Chú</button>
+                </div>
+                 <div id="tag-management-section">
+                    <div id="tag-management-header" class="accordion-header">
+                        <span>Quản lý thẻ</span>
+                        <svg class="chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                    </div>
+                    <div id="tag-management-content" class="accordion-content">
+                        <div id="manageable-tags-list"></div>
+                        <div class="add-tag-form">
+                            <input type="text" id="new-tag-name" placeholder="Tên thẻ mới...">
+                            <input type="color" id="new-tag-color" value="#3b82f6" title="Chọn màu cho thẻ">
+                            <button id="add-tag-btn" class="add-btn">Thêm</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="notes-section">
+                    <div id="filter-dropdown" class="filter-dropdown">
+                         <button id="filter-btn" class="filter-btn">
+                            <span id="filter-label">Tất cả ghi chú</span>
+                            <svg class="chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                        </button>
+                        <div id="filter-options" class="filter-options hidden"></div>
+                    </div>
+                    <div id="notes-list"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <div id="custom-modal-overlay" class="modal-overlay hidden">
+        <div class="modal-content">
+            <p id="modal-message"></p>
+            <div class="modal-actions">
+                <button id="modal-cancel-btn" class="modal-btn-cancel">Hủy</button>
+                <button id="modal-confirm-btn" class="modal-btn-confirm">OK</button>
+            </div>
+        </div>
+    </div>
+    
+   <!-- Firebase UMD bản local -->
+<script src="libs/firebase/firebase-app.js"></script>
+<script src="libs/firebase/firebase-auth.js"></script>
+<script src="libs/firebase/firebase-firestore.js"></script>
+
+<!-- Config riêng -->
+<script src="firebase-config.js"></script>
+<script src="popup.js" type="module"></script>
+
+</body>
+</html>
+
