@@ -1,14 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Ghi Chú Nhanh (Cloud)",
-  "version": "2.0",
-  "description": "Một extension ghi chú nhanh và đơn giản, đồng bộ trên đám mây.",
+  "name": "Ghi Chú Supabase",
+  "version": "3.0",
+  "description": "Một extension ghi chú nhanh, đồng bộ với Supabase.",
   "permissions": [
     "storage"
   ],
   "host_permissions": [
-    "https://*.firebaseio.com/*",
-    "https://*.googleapis.com/*"
+    "https://*.supabase.co/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -24,7 +23,7 @@
     "128": "images/icon.png"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; script-src-elem 'self' https://www.gstatic.com; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'self'"
+    "extension_pages": "script-src 'self'; script-src-elem 'self' https://cdn.jsdelivr.net; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'self'; connect-src https://*.supabase.co;"
   }
 }
 

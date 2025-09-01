@@ -1,14 +1,8 @@
-// Nạp (import) các hàm Firebase trực tiếp từ CDN
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase-config.js';
 
-import { firebaseConfig } from './firebase-config.js';
-
-// Khởi tạo Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-// const db = getFirestore(app); // Sẽ được sử dụng ở bước đồng bộ dữ liệu sau
+// Khởi tạo Supabase client (ĐÃ SỬA LỖI)
+// Thư viện Supabase được nạp từ popup.html sẽ tạo ra một đối tượng 'supabase' toàn cục.
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // --- QUẢN LÝ GIAO DIỆN ---
 const loadingScreen = document.getElementById('loading-screen');
@@ -24,9 +18,7 @@ const logoutBtn = document.getElementById('logout-btn');
 const authError = document.getElementById('auth-error');
 const userEmailDisplay = document.getElementById('user-email-display');
 
-// --- LOGIC GHI CHÚ (TÍCH HỢP ĐẦY ĐỦ) ---
-
-// DOM Elements
+// --- DOM Elements Ghi Chú ---
 const newNoteTitleInput = document.getElementById('new-note-title');
 const noteTagSelect = document.getElementById('note-tag-select');
 const newNoteContentInput = document.getElementById('new-note-content');
@@ -53,83 +45,93 @@ let tags = [];
 let editingNoteId = null;
 let editingTagId = null;
 let currentFilter = 'all';
+let currentUser = null;
 
 // --- "NGƯỜI GÁC CỔNG": Lắng nghe trạng thái đăng nhập ---
-onAuthStateChanged(auth, user => {
-    loadingScreen.classList.add('hidden');
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    const user = session?.user;
+    currentUser = user;
+
     if (user) {
-        // Người dùng đã đăng nhập
         authScreen.classList.add('hidden');
         appScreen.classList.remove('hidden');
         userEmailDisplay.textContent = user.email;
-        
-        // TODO: ở bước tiếp theo, chúng ta sẽ thay thế hàm này
-        // để tải dữ liệu từ Firestore thay vì local storage
-        loadDataFromLocalStorage();
-        
+        await loadDataFromSupabase();
     } else {
-        // Người dùng chưa đăng nhập
         appScreen.classList.add('hidden');
         authScreen.classList.remove('hidden');
-        // Reset trạng thái khi đăng xuất
         notes = [];
         tags = [];
         renderAll();
     }
+    loadingScreen.classList.add('hidden');
 });
-
 
 // --- LOGIC XÁC THỰC ---
 function showAuthError(message) {
     authError.textContent = message;
-    authError.classList.remove('hidden');
 }
 
-loginBtn.addEventListener('click', async () => {
-    const email = emailInput.value;
-    const password = passwordInput.value;
-    authError.textContent = '';
-
-    if (!email || !password) {
-        showAuthError("Vui lòng nhập email và mật khẩu.");
-        return;
-    }
-    try {
-        await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-        showAuthError("Email hoặc mật khẩu không đúng.");
-    }
-});
-
-registerBtn.addEventListener('click', async () => {
+async function handleRegister() {
     const email = emailInput.value;
     const password = passwordInput.value;
     authError.textContent = '';
     
-    if (!email || !password) {
-        showAuthError("Vui lòng nhập email và mật khẩu.");
+    const { error } = await supabaseClient.auth.signUp({ email, password });
+
+    if (error) {
+        showAuthError(error.message);
+    } else {
+        showModal("Đăng ký thành công! Vui lòng kiểm tra email để xác nhận.", "alert");
+    }
+}
+
+async function handleLogin() {
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    authError.textContent = '';
+    
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+    if (error) {
+        showAuthError(error.message);
+    }
+}
+
+async function handleLogout() {
+    await supabaseClient.auth.signOut();
+}
+
+// --- CÁC HÀM XỬ LÝ DỮ LIỆU VỚI SUPABASE ---
+async function loadDataFromSupabase() {
+    if (!currentUser) return;
+
+    const { data: tagsData, error: tagsError } = await supabaseClient
+        .from('tags')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+    if (tagsError) {
+        showModal("Lỗi tải thẻ: " + tagsError.message);
         return;
     }
-    if(password.length < 6){
-        showAuthError("Mật khẩu phải có ít nhất 6 ký tự.");
+    tags = tagsData;
+
+    const { data: notesData, error: notesError } = await supabaseClient
+        .from('notes')
+        .select('*')
+        .order('created_at', { ascending: false });
+    
+    if (notesError) {
+        showModal("Lỗi tải ghi chú: " + notesError.message);
         return;
     }
-    try {
-        await createUserWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-        if (error.code === 'auth/email-already-in-use') {
-            showAuthError("Email này đã được sử dụng.");
-        } else {
-            showAuthError("Đã xảy ra lỗi khi đăng ký.");
-        }
-    }
-});
+    notes = notesData;
 
-logoutBtn.addEventListener('click', () => signOut(auth));
+    renderAll();
+}
 
-
-// --- CÁC HÀM XỬ LÝ GHI CHÚ ---
-
+// --- CÁC HÀM XỬ LÝ GHI CHÚ (Đã sửa đổi để dùng Supabase) ---
 function showModal(message, type = 'alert') {
     return new Promise((resolve) => {
         modalMessage.textContent = message;
@@ -152,37 +154,6 @@ function showModal(message, type = 'alert') {
     });
 }
 
-function loadDataFromLocalStorage() {
-    // Tạm thời vẫn dùng chrome.storage
-    chrome.storage.local.get(['savedNotes', 'savedTags'], function(result) {
-        notes = result.savedNotes || [];
-        tags = result.savedTags || [];
-        let needsSave = false;
-        if (tags.length === 0) {
-            const now = Date.now();
-            tags = [
-                { id: now, name: 'Công việc', color: '#3b82f6' },
-                { id: now + 1, name: 'Học tập', color: '#10b981' },
-                { id: now + 2, name: 'Cá nhân', color: '#ef4444' },
-                { id: now + 3, name: 'Gia đình', color: '#f97316' }
-            ];
-            needsSave = true;
-        } else {
-            const needsMigration = tags.some(tag => typeof tag.id !== 'number' || tag.id < 100000);
-            if (needsMigration) {
-                const now = Date.now();
-                tags.forEach((tag, index) => { tag.id = now + index; });
-                needsSave = true;
-            }
-        }
-        if (needsSave) saveTagsToLocalStorage();
-        renderAll();
-    });
-}
-
-function saveNotesToLocalStorage() { chrome.storage.local.set({ savedNotes: notes }); }
-function saveTagsToLocalStorage() { chrome.storage.local.set({ savedTags: tags }); }
-
 function renderAll() {
     populateTagDropdown();
     renderManageableTags();
@@ -190,33 +161,42 @@ function renderAll() {
     renderNotes();
 }
 
-function renderFilterOptions() {
-    filterOptions.innerHTML = '';
-    const checkmarkSVG = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>`;
-    
-    const allOption = document.createElement('div');
-    allOption.className = 'filter-option-item';
-    allOption.textContent = 'Tất cả ghi chú';
-    allOption.dataset.tag = 'all';
-    if (currentFilter === 'all') {
-        allOption.classList.add('active');
-        allOption.innerHTML += checkmarkSVG;
-        filterLabel.textContent = 'Tất cả ghi chú';
-    }
-    filterOptions.appendChild(allOption);
+function renderNotes() {
+    notesListContainer.innerHTML = '';
+    const filteredNotes = currentFilter === 'all' 
+        ? notes 
+        : notes.filter(note => note.tag_name === currentFilter);
 
-    tags.forEach(tag => {
-        const tagOption = document.createElement('div');
-        tagOption.className = 'filter-option-item';
-        tagOption.textContent = tag.name;
-        tagOption.dataset.tag = tag.name;
-        if (currentFilter === tag.name) {
-            tagOption.classList.add('active');
-            tagOption.innerHTML += checkmarkSVG;
-            filterLabel.textContent = `Thẻ: ${tag.name}`;
-        }
-        filterOptions.appendChild(tagOption);
-    });
+    if (filteredNotes.length === 0) {
+        const message = currentFilter === 'all' 
+            ? 'Chưa có ghi chú nào.' 
+            : `Không có ghi chú nào trong thẻ "${currentFilter}".`;
+        notesListContainer.innerHTML = `<p style="text-align:center; color:#9ca3af;">${message}</p>`;
+    } else {
+        filteredNotes.forEach(note => notesListContainer.appendChild(createNoteCard(note)));
+    }
+}
+
+function createNoteCard(note) {
+    const card = document.createElement('div');
+    card.className = 'note-card';
+    card.dataset.id = note.id;
+    const tagData = tags.find(t => t.name === note.tag_name) || { color: '#9ca3af' };
+    card.style.borderLeftColor = tagData.color;
+    card.innerHTML = `
+        <div class="note-header">
+            <h2 class="note-title">${note.title || 'Không có tiêu đề'}</h2>
+            <span class="note-tag" style="background-color: ${tagData.color};">${note.tag_name}</span>
+        </div>
+        <p class="note-text">${note.content}</p>
+        <div class="note-footer">
+            <span class="note-timestamp">${new Date(note.created_at).toLocaleString('vi-VN')}</span>
+            <div class="note-actions">
+                <button class="edit-note-btn" title="Sửa ghi chú"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg></button>
+                <button class="delete-note-btn" title="Xóa ghi chú"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.134-2.033-2.134H8.033C6.91 2.75 6 3.704 6 4.884v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg></button>
+            </div>
+        </div>`;
+    return card;
 }
 
 function populateTagDropdown() {
@@ -258,67 +238,66 @@ function renderManageableTags() {
     });
 }
 
-function renderNotes() {
-    notesListContainer.innerHTML = '';
-    const filteredNotes = currentFilter === 'all' 
-        ? notes 
-        : notes.filter(note => note.tag === currentFilter);
-
-    if (filteredNotes.length === 0) {
-        const message = currentFilter === 'all' 
-            ? 'Chưa có ghi chú nào.' 
-            : `Không có ghi chú nào trong thẻ "${currentFilter}".`;
-        notesListContainer.innerHTML = `<p style="text-align:center; color:#9ca3af;">${message}</p>`;
-        return;
+function renderFilterOptions() {
+    filterOptions.innerHTML = '';
+    const checkmarkSVG = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>`;
+    const allOption = document.createElement('div');
+    allOption.className = 'filter-option-item';
+    allOption.textContent = 'Tất cả ghi chú';
+    allOption.dataset.tag = 'all';
+    if (currentFilter === 'all') {
+        allOption.classList.add('active');
+        allOption.innerHTML += checkmarkSVG;
+        filterLabel.textContent = 'Tất cả ghi chú';
     }
-    filteredNotes.forEach(note => notesListContainer.appendChild(createNoteCard(note)));
+    filterOptions.appendChild(allOption);
+    tags.forEach(tag => {
+        const tagOption = document.createElement('div');
+        tagOption.className = 'filter-option-item';
+        tagOption.textContent = tag.name;
+        tagOption.dataset.tag = tag.name;
+        if (currentFilter === tag.name) {
+            tagOption.classList.add('active');
+            tagOption.innerHTML += checkmarkSVG;
+            filterLabel.textContent = `Thẻ: ${tag.name}`;
+        }
+        filterOptions.appendChild(tagOption);
+    });
 }
 
-function createNoteCard(note) {
-    const card = document.createElement('div');
-    card.className = 'note-card';
-    card.dataset.id = note.id;
-    const tagData = tags.find(t => t.name === note.tag) || { color: '#9ca3af' };
-    card.style.borderLeftColor = tagData.color;
-    card.innerHTML = `
-        <div class="note-header">
-            <h2 class="note-title">${note.title || 'Không có tiêu đề'}</h2>
-            <span class="note-tag" style="background-color: ${tagData.color};">${note.tag}</span>
-        </div>
-        <p class="note-text">${note.text}</p>
-        <div class="note-footer">
-            <span class="note-timestamp">${new Date(note.timestamp).toLocaleString('vi-VN')}</span>
-            <div class="note-actions">
-                <button class="edit-note-btn" title="Sửa ghi chú"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" /></svg></button>
-                <button class="delete-note-btn" title="Xóa ghi chú"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.134-2.033-2.134H8.033C6.91 2.75 6 3.704 6 4.884v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg></button>
-            </div>
-        </div>`;
-    return card;
-}
-
-function saveOrUpdateNote() {
+async function saveOrUpdateNote() {
     const title = newNoteTitleInput.value.trim();
-    const text = newNoteContentInput.value.trim();
-    const tag = noteTagSelect.value;
-    if (!text) { showModal("Nội dung ghi chú không được để trống.", "alert"); return; }
+    const content = newNoteContentInput.value.trim();
+    const tag_name = noteTagSelect.value;
+    if (!content) { showModal("Nội dung ghi chú không được để trống.", "alert"); return; }
+    
+    let error;
     if (editingNoteId) {
-        const noteToUpdate = notes.find(note => note.id === editingNoteId);
-        if (noteToUpdate) { Object.assign(noteToUpdate, { title, text, tag, timestamp: Date.now() }); }
+        ({ error } = await supabaseClient
+            .from('notes')
+            .update({ title, content, tag_name })
+            .eq('id', editingNoteId));
     } else {
-        notes.unshift({ id: Date.now(), title, text, tag, timestamp: Date.now() });
+        ({ error } = await supabaseClient
+            .from('notes')
+            .insert({ title, content, tag_name, user_id: currentUser.id }));
     }
-    saveNotesToLocalStorage();
-    renderNotes();
-    newNoteTitleInput.value = ''; newNoteContentInput.value = ''; editingNoteId = null;
+
+    if (error) {
+        showModal("Lỗi lưu ghi chú: " + error.message);
+    } else {
+        newNoteTitleInput.value = ''; newNoteContentInput.value = ''; editingNoteId = null;
+        loadDataFromSupabase();
+    }
 }
 
 function handleEditNote(noteId) {
     const noteToEdit = notes.find(note => note.id === noteId);
     if (noteToEdit) {
-        newNoteTitleInput.value = noteToEdit.title;
-        newNoteContentInput.value = noteToEdit.text;
-        noteTagSelect.value = noteToEdit.tag;
         editingNoteId = noteId;
+        newNoteTitleInput.value = noteToEdit.title;
+        newNoteContentInput.value = noteToEdit.content;
+        noteTagSelect.value = noteToEdit.tag_name;
         newNoteTitleInput.focus();
     }
 }
@@ -326,32 +305,41 @@ function handleEditNote(noteId) {
 async function handleDeleteNote(noteId) {
     const confirmed = await showModal("Bạn có chắc chắn muốn xóa ghi chú này không?", "confirm");
     if (confirmed) {
-        notes = notes.filter(note => note.id !== noteId);
-        saveNotesToLocalStorage();
-        renderNotes();
+        const { error } = await supabaseClient.from('notes').delete().eq('id', noteId);
+        if (error) {
+            showModal("Lỗi xóa ghi chú: " + error.message);
+        } else {
+            loadDataFromSupabase();
+        }
     }
 }
 
-function handleAddOrUpdateTag() {
-    const tagName = newTagNameInput.value.trim();
-    const tagColor = newTagColorInput.value;
-    if (!tagName) { showModal("Tên thẻ không được để trống.", "alert"); return; }
-    if (tags.some(t => t.name.toLowerCase() === tagName.toLowerCase() && t.id !== editingTagId)) {
+async function handleAddOrUpdateTag() {
+    const name = newTagNameInput.value.trim();
+    const color = newTagColorInput.value;
+    if (!name) { showModal("Tên thẻ không được để trống.", "alert"); return; }
+    if (tags.some(t => t.name.toLowerCase() === name.toLowerCase() && t.id !== editingTagId)) {
         showModal("Thẻ này đã tồn tại.", "alert"); return;
     }
+    
+    let error;
     if (editingTagId) {
-        const tagToUpdate = tags.find(t => t.id === editingTagId);
-        const oldTagName = tagToUpdate.name;
-        Object.assign(tagToUpdate, { name: tagName, color: tagColor });
-        notes.forEach(note => { if (note.tag === oldTagName) note.tag = tagName; });
-        if (currentFilter === oldTagName) currentFilter = tagName;
-        saveNotesToLocalStorage();
+        ({ error } = await supabaseClient
+            .from('tags')
+            .update({ name, color })
+            .eq('id', editingTagId));
     } else {
-        tags.push({ id: Date.now(), name: tagName, color: tagColor });
+        ({ error } = await supabaseClient
+            .from('tags')
+            .insert({ name, color, user_id: currentUser.id }));
     }
-    editingTagId = null; addTagBtn.textContent = 'Thêm'; newTagNameInput.value = '';
-    saveTagsToLocalStorage();
-    renderAll();
+    
+    if (error) {
+        showModal("Lỗi lưu thẻ: " + error.message);
+    } else {
+        editingTagId = null; addTagBtn.textContent = 'Thêm'; newTagNameInput.value = '';
+        loadDataFromSupabase();
+    }
 }
 
 function handleStartEditTag(tagId) {
@@ -362,31 +350,25 @@ function handleStartEditTag(tagId) {
         newTagColorInput.value = tagToEdit.color;
         addTagBtn.textContent = 'Lưu';
         newTagNameInput.focus();
-        if (!tagManagementContent.classList.contains('expanded')) {
-            tagManagementHeader.classList.add('expanded');
-            tagManagementContent.classList.add('expanded');
-        }
-        renderManageableTags();
     }
 }
 
 async function handleDeleteTag(tagId) {
-    if (tags.length <= 1) { showModal("Không thể xóa thẻ cuối cùng.", "alert"); return; }
-    const tagToDelete = tags.find(t => t.id === tagId);
-    if (!tagToDelete) { showModal("Lỗi: Không tìm thấy thẻ để xóa.", "alert"); return; }
-    const confirmed = await showModal(`Xóa thẻ "${tagToDelete.name}" sẽ đặt lại thẻ của các ghi chú liên quan. Bạn chắc chứ?`, "confirm");
+    const confirmed = await showModal("Bạn có chắc chắn muốn xóa thẻ này không? Các ghi chú dùng thẻ này sẽ không bị xóa.", "confirm");
     if (confirmed) {
-        if(currentFilter === tagToDelete.name) currentFilter = 'all';
-        const fallbackTagName = tags.find(t => t.id !== tagId).name;
-        notes.forEach(note => { if (note.tag === tagToDelete.name) note.tag = fallbackTagName; });
-        tags = tags.filter(t => t.id !== tagId);
-        saveTagsToLocalStorage();
-        saveNotesToLocalStorage();
-        renderAll();
+        const { error } = await supabaseClient.from('tags').delete().eq('id', tagId);
+        if (error) {
+            showModal("Lỗi xóa thẻ: " + error.message);
+        } else {
+            loadDataFromSupabase();
+        }
     }
 }
 
 // Event Listeners
+loginBtn.addEventListener('click', handleLogin);
+registerBtn.addEventListener('click', handleRegister);
+logoutBtn.addEventListener('click', handleLogout);
 newNoteContentInput.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); saveOrUpdateNote(); } });
 saveNoteBtn.addEventListener('click', saveOrUpdateNote);
 addTagBtn.addEventListener('click', handleAddOrUpdateTag);
@@ -394,26 +376,18 @@ tagManagementHeader.addEventListener('click', () => { tagManagementHeader.classL
 
 manageableTagsList.addEventListener('click', (event) => {
     const editBtn = event.target.closest('.edit-tag-btn');
-    if (editBtn) {
-        handleStartEditTag(Number(editBtn.dataset.id));
-    }
+    if (editBtn) handleStartEditTag(Number(editBtn.dataset.id));
     
     const deleteBtn = event.target.closest('.delete-tag-btn');
-    if (deleteBtn) {
-        handleDeleteTag(Number(deleteBtn.dataset.id));
-    }
+    if (deleteBtn) handleDeleteTag(Number(deleteBtn.dataset.id));
 });
 
 notesListContainer.addEventListener('click', (event) => {
     const editBtn = event.target.closest('.edit-note-btn');
-    if (editBtn) {
-        handleEditNote(Number(editBtn.closest('.note-card').dataset.id));
-    }
+    if (editBtn) handleEditNote(Number(editBtn.closest('.note-card').dataset.id));
 
     const deleteBtn = event.target.closest('.delete-note-btn');
-    if (deleteBtn) {
-        handleDeleteNote(Number(deleteBtn.closest('.note-card').dataset.id));
-    }
+    if (deleteBtn) handleDeleteNote(Number(deleteBtn.closest('.note-card').dataset.id));
 });
 
 filterBtn.addEventListener('click', () => { 
