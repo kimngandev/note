@@ -1,23 +1,14 @@
-import { firebaseConfig } from './firebase-config.js';
-import { initializeApp } from "./libs/firebase/firebase-app.js";
-import {
-    getAuth,
-    onAuthStateChanged,
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-    signOut
-} from "./libs/firebase/firebase-auth.js";
-import {
-    getFirestore
-} from "./libs/firebase/firebase-firestore.js";
+// Nạp (import) các hàm Firebase trực tiếp từ CDN
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-// Khởi tạo app
+import { firebaseConfig } from './firebase-config.js';
+
+// Khởi tạo Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
-
-
-// const db = getFirestore(app); // Sẽ dùng ở bước sau
+// const db = getFirestore(app); // Sẽ được sử dụng ở bước đồng bộ dữ liệu sau
 
 // --- QUẢN LÝ GIAO DIỆN ---
 const loadingScreen = document.getElementById('loading-screen');
@@ -63,7 +54,7 @@ let editingNoteId = null;
 let editingTagId = null;
 let currentFilter = 'all';
 
-// --- "NGƯỜI GỐC CỘNG" ---
+// --- "NGƯỜI GÁC CỔNG": Lắng nghe trạng thái đăng nhập ---
 onAuthStateChanged(auth, user => {
     loadingScreen.classList.add('hidden');
     if (user) {
@@ -202,6 +193,7 @@ function renderAll() {
 function renderFilterOptions() {
     filterOptions.innerHTML = '';
     const checkmarkSVG = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>`;
+    
     const allOption = document.createElement('div');
     allOption.className = 'filter-option-item';
     allOption.textContent = 'Tất cả ghi chú';
@@ -212,6 +204,7 @@ function renderFilterOptions() {
         filterLabel.textContent = 'Tất cả ghi chú';
     }
     filterOptions.appendChild(allOption);
+
     tags.forEach(tag => {
         const tagOption = document.createElement('div');
         tagOption.className = 'filter-option-item';
@@ -398,22 +391,51 @@ newNoteContentInput.addEventListener('keydown', (event) => { if (event.key === '
 saveNoteBtn.addEventListener('click', saveOrUpdateNote);
 addTagBtn.addEventListener('click', handleAddOrUpdateTag);
 tagManagementHeader.addEventListener('click', () => { tagManagementHeader.classList.toggle('expanded'); tagManagementContent.classList.toggle('expanded'); });
+
 manageableTagsList.addEventListener('click', (event) => {
-    const editBtn = event.target.closest('.edit-tag-btn'); if (editBtn) handleStartEditTag(Number(editBtn.dataset.id));
-    const deleteBtn = event.target.closest('.delete-tag-btn'); if (deleteBtn) handleDeleteTag(Number(deleteBtn.dataset.id));
+    const editBtn = event.target.closest('.edit-tag-btn');
+    if (editBtn) {
+        handleStartEditTag(Number(editBtn.dataset.id));
+    }
+    
+    const deleteBtn = event.target.closest('.delete-tag-btn');
+    if (deleteBtn) {
+        handleDeleteTag(Number(deleteBtn.dataset.id));
+    }
 });
+
 notesListContainer.addEventListener('click', (event) => {
-    const editBtn = event.target.closest('.edit-note-btn'); if (editBtn) handleEditNote(Number(editBtn.closest('.note-card').dataset.id));
-    const deleteBtn = event.target.closest('.delete-note-btn'); if (deleteBtn) handleDeleteNote(Number(deleteBtn.closest('.note-card').dataset.id));
+    const editBtn = event.target.closest('.edit-note-btn');
+    if (editBtn) {
+        handleEditNote(Number(editBtn.closest('.note-card').dataset.id));
+    }
+
+    const deleteBtn = event.target.closest('.delete-note-btn');
+    if (deleteBtn) {
+        handleDeleteNote(Number(deleteBtn.closest('.note-card').dataset.id));
+    }
 });
-filterBtn.addEventListener('click', () => { filterOptions.classList.toggle('hidden'); filterBtn.classList.toggle('expanded'); });
+
+filterBtn.addEventListener('click', () => { 
+    filterOptions.classList.toggle('hidden'); 
+    filterBtn.classList.toggle('expanded'); 
+});
+
 filterOptions.addEventListener('click', (event) => {
     const filterOption = event.target.closest('.filter-option-item');
     if (filterOption) {
         currentFilter = filterOption.dataset.tag;
-        filterOptions.classList.add('hidden'); filterBtn.classList.remove('expanded');
+        filterOptions.classList.add('hidden'); 
+        filterBtn.classList.remove('expanded');
         renderFilterOptions();
         renderNotes();
     }
 });
-document.addEventListener('click', (event) => { if (!filterDropdown.contains(event.target)) { filterOptions.classList.add('hidden'); filterBtn.classList.remove('expanded'); } });
+
+document.addEventListener('click', (event) => { 
+    if (!filterDropdown.contains(event.target)) { 
+        filterOptions.classList.add('hidden'); 
+        filterBtn.classList.remove('expanded'); 
+    } 
+});
+
